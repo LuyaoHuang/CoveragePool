@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+rm -rf upload/migrations db.sqlite3
+
+python2 ./manage.py makemigrations upload
+python2 ./manage.py migrate
