@@ -8,21 +8,37 @@ from django.forms.models import model_to_dict
 
 # Create your views here.
 
+def request_check(request, check_dict):
+    for i in check_dict.keys():
+        if i == 'post':
+            check_list = request.POST.keys()
+        elif i == 'files':
+            check_list = request.FILES.keys()
+        else:
+            raise Exception("Unkown type %s" % i)
+
+        for n in check_dict[i]:
+            if n not in check_list:
+                return 1, "Need pass %s" % n
+
+    return 0, "Pass"
+
+
 @csrf_exempt
 def coveragefile(request):
-    if 'name' not in request.POST.keys():
-        return HttpResponse("Need pass name", content_type="text/plain; charset=utf-8")
-    if 'version' not in request.POST.keys():
-        return HttpResponse("Need pass version", content_type="text/plain; charset=utf-8")
-    if 'coveragefile' not in request.FILES.keys():
-        return HttpResponse("Need pass coveragefile", content_type="text/plain; charset=utf-8")
+    ret, msg = request_check(request, {'post': ['name', 'version', 'user_name'],
+                                       'files': ['coveragefile']})
+    if ret == 1:
+        return HttpResponse(msg, content_type="text/plain; charset=utf-8")
 
     name = request.POST.get('name')
+    user_name = request.POST.get('user_name')
     version = request.POST.get('version')
     coveragefile = request.FILES['coveragefile']
 
     date = parser.parse(time.ctime()).replace(tzinfo=None)
     cf = CoverageFile.objects.create(name=name,
+                                     user_name=user_name,
                                      coveragefile=request.FILES['coveragefile'],
                                      date=date, version=version)
     cf.save()
@@ -32,7 +48,6 @@ def coveragefile(request):
 def listfile(request):
     ret = []
 
-    print request.POST
     if 'name' in request.POST.keys():
         objs = CoverageFile.objects.filter(name=request.POST['name'])
     else:
