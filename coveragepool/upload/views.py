@@ -5,6 +5,7 @@ from dateutil import parser
 import time
 from django.views.decorators.csrf import csrf_exempt
 from django.forms.models import model_to_dict
+from .google_api import GoogleSheetMGR
 
 # Create your views here.
 
@@ -42,6 +43,13 @@ def coveragefile(request):
                                      coveragefile=request.FILES['coveragefile'],
                                      date=date, version=version)
     cf.save()
+    gs = GoogleSheetMGR()
+    gs.add_new_row_by_dict({"Id": cf.id,
+                            "Name": name,
+                            "User Name": user_name,
+                            "Version": version,
+                            "Date": cf.date.strftime("%Y-%m-%d %H:%M:%S")})
+
     return HttpResponse("OK", content_type="text/plain; charset=utf-8")
 
 
@@ -60,3 +68,16 @@ def listfile(request):
         ret.append(tmp_json)
 
     return JsonResponse({'data': ret})
+
+def sync_data(request):
+    objs = CoverageFile.objects.all()
+    gs = GoogleSheetMGR()
+
+    for i, obj in enumerate(objs):
+        gs.add_new_row_by_dict({"Id": obj.id,
+                                "Name": obj.name
+                                "User Name": obj.user_name,
+                                "Version": obj.version,
+                                "Date": obj.date.strftime("%Y-%m-%d %H:%M:%S")}, row=i+2)
+
+    return HttpResponse("Done!\n", content_type="text/plain; charset=utf-8")
