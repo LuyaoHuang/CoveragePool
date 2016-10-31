@@ -75,7 +75,7 @@ def sync_data(request):
 
     for i, obj in enumerate(objs):
         gs.add_new_row_by_dict({"Id": obj.id,
-                                "Name": obj.name
+                                "Name": obj.name,
                                 "User Name": obj.user_name,
                                 "Version": obj.version,
                                 "Date": obj.date.strftime("%Y-%m-%d %H:%M:%S")}, row=i+2)
