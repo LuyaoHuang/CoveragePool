@@ -24,7 +24,7 @@ class GoogleSheetMGR(object):
         self.Worksheet = gc.open_by_key(self.key)
 
         if self.sheet:
-            self.ws_obj = getattr(self.Worksheet, self.sheet)
+            self.ws_obj = self.Worksheet.get_worksheet(self.sheet)
         else:
             self.ws_obj = self.Worksheet.sheet1
 
@@ -92,3 +92,27 @@ class GoogleSheetMGR(object):
         for index, key in enumerate(self.keys):
             if key in data_dict.keys():
                 self._update_cell(new_row, index + 1, data_dict[key])
+
+    def search_update_by_dict(self, search_dict, data_dict):
+        table = self._get_all_values()
+        index_dict = {}
+        index_dict2 = {}
+        for index, key in enumerate(self.keys):
+            if key in search_dict.keys():
+                index_dict[index] = search_dict[key]
+            if key in data_dict.keys():
+                index_dict2[index] = data_dict[key]
+
+        for row, i in enumerate(table):
+            for index, val in index_dict.items():
+                if i[index] != val:
+                    found = False
+                    break
+                else:
+                    found = True
+
+            if not found:
+                continue
+
+            for key, val in index_dict2.items():
+                self._update_cell(row + 1, key + 1, val)

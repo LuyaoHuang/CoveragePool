@@ -126,3 +126,12 @@ MEDIA_URL = '/media/'
 STATIC_URL = '/static/'
 
 CELERY_RESULT_BACKEND = 'amqp://localhost'
+
+COVERAGE_BASE_DIR = ''
+
+COVERAGE_BASE_URL = ''
+
+# Like this 'v{1}' ---> 'v2.4.0'
+COVERAGE_TAG_FMT = ''
+
+COVERAGE_GIT_REPO = ''
