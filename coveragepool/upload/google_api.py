@@ -105,7 +105,7 @@ class GoogleSheetMGR(object):
 
         for row, i in enumerate(table):
             for index, val in index_dict.items():
-                if i[index] != val:
+                if i[index] != str(val):
                     found = False
                     break
                 else:

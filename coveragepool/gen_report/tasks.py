@@ -46,11 +46,11 @@ class CoverageReportCB(CallbackTask):
 
         try:
             cr.coverage_files.add(obj)
-            target = os.path.join(base_dir, cr.id)
+            target = os.path.join(base_dir, str(cr.id))
             shutil.copytree(output_dir, target)
 
             if base_url:
-                url = base_url + cr.id
+                url = base_url + str(cr.id)
             else:
                 url = ''
 
@@ -235,11 +235,11 @@ class MergeCoverageReportCB(CallbackTask):
         try:
             for obj in objs:
                 cr.coverage_files.add(obj)
-            target = os.path.join(base_dir, cr.id)
+            target = os.path.join(base_dir, str(cr.id))
             shutil.copytree(output_dir, target)
 
             if base_url:
-                url = base_url + cr.id
+                url = base_url + str(cr.id)
             else:
                 url = ''
 
