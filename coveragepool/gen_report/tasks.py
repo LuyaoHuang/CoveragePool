@@ -42,9 +42,10 @@ class CoverageReportCB(CallbackTask):
 
         date = parser.parse(time.ctime()).replace(tzinfo=None)
         cr = CoverageReport.objects.create(name=obj.name,
-                version=obj.version, date=date, coverage_files=[obj])
+                version=obj.version, date=date)
 
         try:
+            cr.coverage_files.add(obj)
             target = os.path.join(base_dir, cr.id)
             shutil.copytree(output_dir, target)
 
@@ -229,9 +230,11 @@ class MergeCoverageReportCB(CallbackTask):
 
         date = parser.parse(time.ctime()).replace(tzinfo=None)
         cr = CoverageReport.objects.create(name='Merged report',
-                version=objs[0].version, date=date, coverage_files=objs)
+                version=objs[0].version, date=date)
 
         try:
+            for obj in objs:
+                cr.coverage_files.add(obj)
             target = os.path.join(base_dir, cr.id)
             shutil.copytree(output_dir, target)
 
