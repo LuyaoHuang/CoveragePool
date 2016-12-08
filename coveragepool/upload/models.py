@@ -28,10 +28,10 @@ class CoverageReport(models.Model):
     coverage_files = models.ManyToManyField(CoverageFile)
 
 @receiver(post_delete, sender=CoverageFile)
-def CoverageFile_post_delete_handler(sender, **kwargs):
+def CoverageFile_post_delete_handler(sender, instance, **kwargs):
     instance.coveragefile.delete(save=False)
 
 @receiver(post_delete, sender=CoverageReport)
-def CoverageReport_post_delete_handler(sender, **kwargs):
+def CoverageReport_post_delete_handler(sender, instance, **kwargs):
     if instance.path:
         shutil.rmtree(instance.path)
