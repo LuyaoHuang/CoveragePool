@@ -19,7 +19,7 @@ from django.conf import settings
 
 from upload.google_api import GoogleSheetMGR
 from upload.models import CoverageFile, CoverageReport
-from .utils import run_cmd
+from .utils import run_cmd, parse_package_name, check_package_version, trans_distro_info
 
 logger = get_task_logger(__name__)
 
@@ -77,33 +77,7 @@ class CoverageReportCB(CallbackTask):
         gs.search_update_by_dict({'Id': obj.id},
                                  {'Coverage Report': 'Fail to generate report'})
 
-def parse_package_name(package_name):
-    match = re.match(
-        r"^(.+)\.([^.]+)$", package_name)
-    if not match:
-        raise Exception('Package %s can not be parsed' % package_name)
-
-    nvr, arch = match.groups()
-    match = re.match(r"^(.+)-([^-]+)-([^-]+)$", nvr)
-    if not match:
-        raise Exception('NVR %s can not be parsed' % nvr)
-    name, version, release = match.groups()
-    return name, version, release, arch
-
-def check_package_version(name):
-    cmd = 'rpm -q ' + name
-    out = run_cmd(cmd)
-    return out[:-1]
-
-def trans_distro_info():
-    info = platform.linux_distribution()
-    if 'Red Hat Enterprise Linux' in info[0]:
-        tmp = info[1].split('.')
-        return 'el%s' % tmp[0]
-    else:
-        raise Exception('Not support %s right now' % info[0])
-
-def convert_tracefile(file_path):
+def convert_tracefile(file_path, check_all=True):
     # Work around someone's stupid patch :D
     with open(file_path) as fp:
         lines = fp.readlines()
@@ -113,7 +87,8 @@ def convert_tracefile(file_path):
             if '/usr/coverage/' in line:
                 lines[i] = line.replace('/usr/coverage/', '/mnt/coverage/')
             elif '/mnt/coverage/' in line:
-                return
+                if not check_all:
+                    return
 
     with open(file_path, 'w') as fp:
         fp.writelines(lines)
@@ -192,8 +167,8 @@ def get_git_diff(work_dir, src_pkg, tgt_pkg):
     if not tag_fmt:
         raise Exception('No COVERAGE_TAG_FMT in settings')
 
-    src_tag = tag_fmt.format(parse_package_name(package_name))
-    tgt_tag = tag_fmt.format(parse_package_name(package_name))
+    src_tag = tag_fmt.format(parse_package_name(src_pkg))
+    tgt_tag = tag_fmt.format(parse_package_name(tgt_pkg))
 
     git_dir = os.path.join(work_dir, '.git')
     cmd = 'git --git-dir %s --work-tree %s diff %s %s' % (git_dir, work_dir, src_tag, tgt_tag)
@@ -283,5 +258,6 @@ def merge_coverage_report(obj_ids, output_dir):
         merge_cmd += ' -a %s' % i
     merge_cmd += ' -o %s' % tmp_tracefile
     run_cmd(merge_cmd)
+    convert_tracefile(tmp_tracefile)
     cmd = 'genhtml %s --output-directory %s' % (tmp_tracefile, output_dir)
     run_cmd(cmd)
