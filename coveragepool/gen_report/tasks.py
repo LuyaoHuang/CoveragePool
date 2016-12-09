@@ -174,6 +174,18 @@ def extra_prepare_libvirt(work_dir):
 
     cmd_fmt = 'perl -w %s /usr/bin/rpcgen -h %s %s'
     cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/remote/qemu_protocol.x'),
+                     os.path.join(work_dir, 'src/remote/qemu_protocol.h'),)
+    out = run_cmd(cmd)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -c %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/remote/qemu_protocol.x'),
+                     os.path.join(work_dir, 'src/remote/qemu_protocol.c'),)
+    out = run_cmd(cmd)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -h %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
                      os.path.join(work_dir, 'src/rpc/virkeepaliveprotocol.x'),
                      os.path.join(work_dir, 'src/rpc/virkeepaliveprotocol.h'),)
     out = run_cmd(cmd)
