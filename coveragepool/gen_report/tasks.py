@@ -139,8 +139,10 @@ def prepare_env_git(work_dir, package_name, base_dir='/usr/share/coveragepool/')
     if not tag_fmt:
         raise Exception('No COVERAGE_TAG_FMT in settings')
 
-    name, _, _, _ = parse_package_name(package_name)
-    tag = tag_fmt.format(parse_package_name(package_name))
+    name, version, release, arch = parse_package_name(package_name)
+    if 'virtcov' in release:
+        release = release.replace('.virtcov', '')
+    tag = tag_fmt.format(name, version, release, arch)
 
     Base_dir = os.path.join(base_dir, name)
     if os.path.exists(Base_dir):
