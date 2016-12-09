@@ -186,6 +186,7 @@ def gen_coverage_report(obj_id, output_dir):
     # TODO: Ensuring a task is only executed one at a time
     obj = CoverageFile.objects.get(id=obj_id)
     work_dir = prepare_env(obj.version)
+    convert_tracefile(obj.coveragefile.path)
     cmd = 'genhtml %s --output-directory %s' % (obj.coveragefile.path, output_dir)
     logger.info('Run cmd: ' + cmd)
     run_cmd(cmd)
