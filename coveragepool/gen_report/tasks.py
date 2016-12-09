@@ -237,6 +237,7 @@ def prepare_env_git(work_dir, package_name, base_dir='/usr/share/coveragepool/')
         shutil.rmtree(work_dir)
     shutil.copytree(Base_dir, work_dir)
     run_cmd(cmd2)
+    extra_prepare_libvirt(work_dir)
 
 def get_git_diff(work_dir, src_pkg, tgt_pkg):
     tag_fmt = getattr(settings, "COVERAGE_TAG_FMT", None)
@@ -353,11 +354,11 @@ def rescan_table():
     gs = GoogleSheetMGR()
     table = gs.get_all_values()
     for obj in objs:
-        info = gs.search_info_by_dict({'Id': obj.id}, table)
-        if info:
-            if info['Name'] != obj.name:
-                logger.info('Update %s name to %s' % (str(obj.id), info['Name']))
-                obj.name = info['Name']
+        infos = gs.search_info_by_dict({'Id': obj.id}, table)
+        if infos:
+            if infos[0]['Name'] != obj.name:
+                logger.info('Update %s name to %s' % (str(obj.id), infos[0]['Name']))
+                obj.name = infos[0]['Name']
                 obj.save()
         else:
             logger.info('Cannot find id %s in table, delete it' % str(obj.id))
