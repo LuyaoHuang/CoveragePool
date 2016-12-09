@@ -156,7 +156,7 @@ def prepare_env_git(work_dir, package_name, base_dir='/usr/share/coveragepool/')
         cmd = 'git clone %s %s' % (git_repo, Base_dir)
 
     git_dir = os.path.join(work_dir, '.git')
-    cmd2 = 'git --git-dir %s --work-tree %s checkout %s' % (git_dir, work_dir, tag)
+    cmd2 = 'git --git-dir %s --work-tree %s -f checkout %s' % (git_dir, work_dir, tag)
 
     run_cmd(cmd)
     if os.path.exists(work_dir):
