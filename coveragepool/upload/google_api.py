@@ -116,3 +116,32 @@ class GoogleSheetMGR(object):
 
             for key, val in index_dict2.items():
                 self._update_cell(row + 1, key + 1, val)
+
+    def search_info_by_dict(self, search_dict, table=None):
+        # TODO: merge code with search_update_by_dict
+        if not table:
+            table = self._get_all_values()
+
+        index_dict = {}
+        for index, key in enumerate(self.keys):
+            if key in search_dict.keys():
+                index_dict[index] = search_dict[key]
+
+        ret = []
+        for row, i in enumerate(table):
+            for index, val in index_dict.items():
+                if i[index] != str(val):
+                    found = False
+                    break
+                else:
+                    found = True
+
+            if not found:
+                continue
+
+            tmp = {}
+            for index, key in enumerate(self.keys):
+                tmp[key] = i[index]
+            ret.append(tmp)
+
+        return ret

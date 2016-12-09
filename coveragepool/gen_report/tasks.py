@@ -1,6 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 from celery import shared_task, Task
-from celery.decorators import task
+from celery.decorators import task, periodic_task
+from celery.task.schedules import crontab
 from celery.utils.log import get_task_logger
 
 import os
@@ -133,6 +134,79 @@ def prepare_env_rpm(package_name, old=False):
     run_cmd(pre_cmd)
     run_cmd(cmd)
     run_cmd(cmd2)
+
+def extra_prepare_libvirt(work_dir):
+    cmd = 'perl -w %s -k remote REMOTE %s' % (os.path.join(work_dir, 'src/rpc/gendispatch.pl'),
+                                              os.path.join(work_dir, 'src/remote/remote_protocol.x'))
+    out = run_cmd(cmd)
+    with open(os.path.join(work_dir, 'src/remote/remote_client_bodies.h'), 'w') as fp:
+        fp.write(out)
+
+    cmd = 'perl -w %s -k qemu QEMU %s' % (os.path.join(work_dir, 'src/rpc/gendispatch.pl'),
+                                          os.path.join(work_dir, 'src/remote/qemu_protocol.x'))
+    out = run_cmd(cmd)
+    with open(os.path.join(work_dir, 'src/remote/qemu_client_bodies.h'), 'w') as fp:
+        fp.write(out)
+
+    cmd = 'perl -w %s -b remote REMOTE %s' % (os.path.join(work_dir, 'src/rpc/gendispatch.pl'),
+                                              os.path.join(work_dir, 'src/remote/remote_protocol.x'))
+    out = run_cmd(cmd)
+    with open(os.path.join(work_dir, 'daemon/remote_dispatch.h'), 'w') as fp:
+        fp.write(out)
+
+    cmd = 'perl -w %s -b qemu QEMU %s' % (os.path.join(work_dir, 'src/rpc/gendispatch.pl'),
+                                          os.path.join(work_dir, 'src/remote/qemu_protocol.x'))
+    out = run_cmd(cmd)
+    with open(os.path.join(work_dir, 'daemon/qemu_dispatch.h'), 'w') as fp:
+        fp.write(out)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -h %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/remote/remote_protocol.x'),
+                     os.path.join(work_dir, 'src/remote/remote_protocol.h'),)
+    out = run_cmd(cmd)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -c %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/remote/remote_protocol.x'),
+                     os.path.join(work_dir, 'src/remote/remote_protocol.c'),)
+    out = run_cmd(cmd)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -h %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/rpc/virkeepaliveprotocol.x'),
+                     os.path.join(work_dir, 'src/rpc/virkeepaliveprotocol.h'),)
+    out = run_cmd(cmd)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -c %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/rpc/virkeepaliveprotocol.x'),
+                     os.path.join(work_dir, 'src/rpc/virkeepaliveprotocol.c'),)
+    out = run_cmd(cmd)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -h %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/rpc/virnetprotocol.x'),
+                     os.path.join(work_dir, 'src/rpc/virnetprotocol.h'),)
+    out = run_cmd(cmd)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -c %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/rpc/virnetprotocol.x'),
+                     os.path.join(work_dir, 'src/rpc/virnetprotocol.c'),)
+    out = run_cmd(cmd)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -h %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/lxc/lxc_protocol.x'),
+                     os.path.join(work_dir, 'src/lxc/lxc_protocol.h'),)
+    out = run_cmd(cmd)
+
+    cmd_fmt = 'perl -w %s /usr/bin/rpcgen -c %s %s'
+    cmd = cmd_fmt % (os.path.join(work_dir, 'src/rpc/genprotocol.pl'),
+                     os.path.join(work_dir, 'src/lxc/lxc_protocol.x'),
+                     os.path.join(work_dir, 'src/lxc/lxc_protocol.c'),)
+    out = run_cmd(cmd)
 
 def prepare_env_git(work_dir, package_name, base_dir='/usr/share/coveragepool/'):
     tag_fmt = getattr(settings, "COVERAGE_TAG_FMT", None)
@@ -268,3 +342,23 @@ def merge_coverage_report(obj_ids, output_dir):
     # TODO: find a way to not use this work around when the source is from git
     cmd += ' --ignore-errors source'
     run_cmd(cmd)
+
+#
+# Periodic Tasks
+#
+
+@periodic_task(run_every=(crontab(minute='*/15')), name="rescan_table", ignore_result=True)
+def rescan_table():
+    objs = CoverageFile.objects.all()
+    gs = GoogleSheetMGR()
+    table = gs.get_all_values()
+    for obj in objs:
+        info = gs.search_info_by_dict({'Id': obj.id}, table)
+        if info:
+            if info['Name'] != obj.name:
+                logger.info('Update %s name to %s' % (str(obj.id), info['Name']))
+                obj.name = info['Name']
+                obj.save()
+        else:
+            logger.info('Cannot find id %s in table, delete it' % str(obj.id))
+            obj.delete()
