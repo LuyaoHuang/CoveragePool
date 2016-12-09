@@ -350,16 +350,24 @@ def merge_coverage_report(obj_ids, output_dir):
 
 @periodic_task(run_every=(crontab(minute='*/15')), name="rescan_table", ignore_result=True)
 def rescan_table():
+    def _check_obj(objs, table, gs):
+        for obj in objs:
+            infos = gs.search_info_by_dict({'Id': obj.id}, table)
+            if infos:
+                if infos[0]['Name'] != obj.name:
+                    logger.info('Update %s name to %s' % (str(obj.id), infos[0]['Name']))
+                    obj.name = infos[0]['Name']
+                    obj.save()
+            else:
+                logger.info('Cannot find id %s in table, delete it' % str(obj.id))
+                obj.delete()
+
     objs = CoverageFile.objects.all()
     gs = GoogleSheetMGR()
     table = gs.get_all_values()
-    for obj in objs:
-        infos = gs.search_info_by_dict({'Id': obj.id}, table)
-        if infos:
-            if infos[0]['Name'] != obj.name:
-                logger.info('Update %s name to %s' % (str(obj.id), infos[0]['Name']))
-                obj.name = infos[0]['Name']
-                obj.save()
-        else:
-            logger.info('Cannot find id %s in table, delete it' % str(obj.id))
-            obj.delete()
+    _check_obj(objs, table, gs)
+
+    objs = CoverageReport.objects.all()
+    gs = GoogleSheetMGR(sheet=1)
+    table = gs.get_all_values()
+    _check_obj(objs, table, gs)
