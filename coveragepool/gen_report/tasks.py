@@ -190,6 +190,8 @@ def gen_coverage_report(obj_id, output_dir):
     work_dir = prepare_env(obj.version)
     convert_tracefile(obj.coveragefile.path)
     cmd = 'genhtml %s --output-directory %s' % (obj.coveragefile.path, output_dir)
+    # TODO: find a way to not use this work around when the source is from git
+    cmd += ' --ignore-errors source'
     logger.info('Run cmd: ' + cmd)
     run_cmd(cmd)
 
@@ -263,4 +265,6 @@ def merge_coverage_report(obj_ids, output_dir):
     run_cmd(merge_cmd)
     convert_tracefile(tmp_tracefile)
     cmd = 'genhtml %s --output-directory %s' % (tmp_tracefile, output_dir)
+    # TODO: find a way to not use this work around when the source is from git
+    cmd += ' --ignore-errors source'
     run_cmd(cmd)
