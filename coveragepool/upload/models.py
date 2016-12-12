@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 from django.db import models
 from django.dispatch import receiver
 from django.db.models.signals import post_delete
+from django.core.files import File
 import random
 import shutil
 
@@ -25,7 +26,15 @@ class CoverageReport(models.Model):
     date = models.DateTimeField()
     path = models.CharField(max_length=100, blank=True, null=True)
     url = models.CharField(max_length=100, blank=True, null=True)
+    tracefile = models.FileField(null=True)
+    rules = models.CharField(max_length=100, blank=True, null=True)
     coverage_files = models.ManyToManyField(CoverageFile)
+
+    def save_tracefile(self, tracefile):
+        with open(tracefile) as fp:
+            myfile = File(fp)
+        name = 'merged_report_%d.tf' % self.id
+        self.tracefile.save(name, myfile)
 
 @receiver(post_delete, sender=CoverageFile)
 def CoverageFile_post_delete_handler(sender, instance, **kwargs):
@@ -35,3 +44,5 @@ def CoverageFile_post_delete_handler(sender, instance, **kwargs):
 def CoverageReport_post_delete_handler(sender, instance, **kwargs):
     if instance.path:
         shutil.rmtree(instance.path)
+    if instance.tracefile:
+        instance.tracefile.delete(save=False)

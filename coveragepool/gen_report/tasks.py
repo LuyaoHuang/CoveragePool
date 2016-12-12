@@ -285,19 +285,21 @@ def gen_coverage_report(obj_id, output_dir):
 class MergeCoverageReportCB(CallbackTask):
     def on_success(self, retval, task_id, args, kwargs):
         super(MergeCoverageReportCB, self).on_success(retval, task_id, args, kwargs)
-        obj_ids, output_dir = args
+        obj_ids, output_dir, mobj_id = args
         base_dir = getattr(settings, "COVERAGE_BASE_DIR", None)
         base_url = getattr(settings, "COVERAGE_BASE_URL", None)
 
         objs = [CoverageFile.objects.get(id=obj_id) for obj_id in obj_ids]
-        objs_name = [obj.name for obj in objs]
 
         if not base_dir:
             return
 
         date = parser.parse(time.ctime()).replace(tzinfo=None)
-        cr = CoverageReport.objects.create(name='Merged report',
-                version=objs[0].version, date=date)
+        if mobj_id:
+            cr = CoverageReport.objects.get(id=mobj_id)
+        else:
+            cr = CoverageReport.objects.create(name='Merged report',
+                    version=objs[0].version, date=date)
 
         try:
             for obj in objs:
@@ -308,32 +310,64 @@ class MergeCoverageReportCB(CallbackTask):
             if base_url:
                 url = base_url + str(cr.id)
             else:
-                url = ''
+                url = 'Need set COVERAGE_BASE_URL in settings'
 
+            old_path = cr.path
             cr.path = target
+
+            old_url = cr.url
             cr.url = url
+
+            old_tracefile = cr.tracefile
+            cr.save_tracefile('/tmp/merge.tracefile')
             cr.save()
 
-            if not url:
-                return
-
             gs = GoogleSheetMGR(sheet=1)
-            gs.add_new_row_by_dict({"Id": cr.id,
-                                    "Name": cr.name,
-                                    "Version": cr.version,
-                                    "Date": cr.date.strftime("%Y-%m-%d %H:%M:%S"),
-                                    "Merged from": '\n'.join(objs_name),
-                                    "Coverage Report": url})
+            info_dict = {"Id": cr.id,
+                         "Name": cr.name,
+                         "Version": cr.version,
+                         "Date": cr.date.strftime("%Y-%m-%d %H:%M:%S"),
+                         "Merged from": '\n'.join([obj.name for obj in cr.coverage_files]),
+                         "Coverage Report": url}
+            if not mobj_id:
+                gs.add_new_row_by_dict(info_dict)
+            else:
+                gs.search_update_by_dict({'Id': mobj_id}, info_dict)
+            if old_path:
+                shutil.rmtree(old_path)
+            if old_tracefile:
+                old_tracefile.delete(save=False)
+
         except Exception as detail:
-            cr.delete()
+            if not mobj_id:
+                cr.delete()
+            else:
+                if old_path and cr.path != old_path:
+                    shutil.rmtree(cr.path)
+                    cr.path = old_path
+                if old_tracefile and cr.tracefile != old_tracefile:
+                    cr.tracefile.delete(save=False)
+                    cr.tracefile = old_tracefile
+                for obj in objs:
+                    cr.coverage_files.remove(obj)
             logger.error('Fail to finish successed work: %s' % detail)
 
 
 @task(base=MergeCoverageReportCB)
-def merge_coverage_report(obj_ids, output_dir):
+def merge_coverage_report(obj_ids, output_dir, merge_id=None):
     #TODO: support convert report
     only_version = None
     coverage_files = []
+    merge_cmd = 'lcov'
+
+    if merge_id:
+        obj = CoverageReport.objects.get(id=merge_id)
+        only_version = obj.version.split('.')[:-1]
+        if not obj.tracefile:
+            coverage_files.extend([i.coveragefile.path for i in obj.coverage_files])
+        else:
+            merge_cmd += ' -a %s' % obj.tracefile.path
+
     for obj_id in obj_ids:
         obj = CoverageFile.objects.get(id=obj_id)
         coverage_files.append(obj.coveragefile.path)
@@ -345,7 +379,6 @@ def merge_coverage_report(obj_ids, output_dir):
 
     work_dir = prepare_env(obj.version)
     tmp_tracefile = '/tmp/merge.tracefile'
-    merge_cmd = 'lcov'
     for i in coverage_files:
         merge_cmd += ' -a %s' % i
     merge_cmd += ' -o %s' % tmp_tracefile
