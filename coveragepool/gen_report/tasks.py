@@ -340,6 +340,7 @@ class MergeCoverageReportCB(CallbackTask):
                 old_tracefile.delete(save=False)
 
         except Exception as detail:
+            logger.error('Fail to finish successed work: %s' % detail)
             if not mobj_id:
                 cr.delete()
             else:
@@ -351,7 +352,6 @@ class MergeCoverageReportCB(CallbackTask):
                     cr.tracefile = old_tracefile
                 for obj in objs:
                     cr.coverage_files.remove(obj)
-            logger.error('Fail to finish successed work: %s' % detail)
 
 
 @task(base=MergeCoverageReportCB)
