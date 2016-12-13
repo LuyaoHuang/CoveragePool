@@ -308,7 +308,7 @@ class MergeCoverageReportCB(CallbackTask):
             for obj in objs:
                 cr.coverage_files.add(obj)
             target = os.path.join(base_dir, str(cr.id))
-            if os.path.exist(target):
+            if os.path.exists(target):
                 old_path = os.path.join(base_dir, '%stmp' % str(cr.id))
                 shutil.move(target, old_path)
             shutil.copytree(output_dir, target)
