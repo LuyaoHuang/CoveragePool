@@ -43,6 +43,6 @@ def CoverageFile_post_delete_handler(sender, instance, **kwargs):
 @receiver(post_delete, sender=CoverageReport)
 def CoverageReport_post_delete_handler(sender, instance, **kwargs):
     if instance.path:
-        shutil.rmtree(instance.path)
+        shutil.rmtree(instance.path, True)
     if instance.tracefile:
         instance.tracefile.delete(save=False)

@@ -272,6 +272,7 @@ def get_git_diff(work_dir, src_pkg, tgt_pkg):
 
 @task(base=CoverageReportCB)
 def gen_coverage_report(obj_id, output_dir):
+    shutil.rmtree(output_dir, True)
     # TODO: Ensuring a task is only executed one at a time
     obj = CoverageFile.objects.get(id=obj_id)
     work_dir = prepare_env(obj.version)
@@ -327,14 +328,14 @@ class MergeCoverageReportCB(CallbackTask):
                          "Name": cr.name,
                          "Version": cr.version,
                          "Date": cr.date.strftime("%Y-%m-%d %H:%M:%S"),
-                         "Merged from": '\n'.join([obj.name for obj in cr.coverage_files]),
+                         "Merged from": '\n'.join([obj.name for obj in cr.coverage_files.all()]),
                          "Coverage Report": url}
             if not mobj_id:
                 gs.add_new_row_by_dict(info_dict)
             else:
                 gs.search_update_by_dict({'Id': mobj_id}, info_dict)
             if old_path:
-                shutil.rmtree(old_path)
+                shutil.rmtree(old_path, True)
             if old_tracefile:
                 old_tracefile.delete(save=False)
 
@@ -343,7 +344,7 @@ class MergeCoverageReportCB(CallbackTask):
                 cr.delete()
             else:
                 if old_path and cr.path != old_path:
-                    shutil.rmtree(cr.path)
+                    shutil.rmtree(cr.path, True)
                     cr.path = old_path
                 if old_tracefile and cr.tracefile != old_tracefile:
                     cr.tracefile.delete(save=False)
@@ -359,12 +360,13 @@ def merge_coverage_report(obj_ids, output_dir, merge_id=None):
     only_version = None
     coverage_files = []
     merge_cmd = 'lcov'
+    shutil.rmtree(output_dir, True)
 
     if merge_id:
         obj = CoverageReport.objects.get(id=merge_id)
         only_version = obj.version.split('.')[:-1]
         if not obj.tracefile:
-            coverage_files.extend([i.coveragefile.path for i in obj.coverage_files])
+            coverage_files.extend([i.coveragefile.path for i in obj.coverage_files.all()])
         else:
             merge_cmd += ' -a %s' % obj.tracefile.path
 
@@ -407,6 +409,28 @@ def rescan_table():
                 logger.info('Cannot find id %s in table, delete it' % str(obj.id))
                 obj.delete()
 
+    def _update_merge_report(objs):
+        for obj in objs:
+            if not obj.coverage_files.all():
+                # this is not a merged report, skip it
+                continue
+            exist_cfs = obj.coverage_files.all()
+            if not obj.rules:
+                continue
+            rules = obj.rules.split(';')
+            kargs = {}
+            for i in rules:
+                kargs[i.split(':')[0]] = i.split(':')[1]
+            try:
+                cf_objs = CoverageFile.objects.filter(**kargs)
+            except:
+                logger.error('Fail to find CoverageFile with rules: %s, CoverageReport id: %d' % obj.rules, obj.id)
+                continue
+
+            s_exist_cfs = set(exist_cfs)
+            new_objs = [i for i in cf_objs if i not in s_exist_cfs]
+            merge_coverage_report.delay(new_objs, '/tmp/tmpdir', obj.id)
+
     objs = CoverageFile.objects.all()
     gs = GoogleSheetMGR()
     table = gs.get_all_values()
@@ -416,3 +440,4 @@ def rescan_table():
     gs = GoogleSheetMGR(sheet=1)
     table = gs.get_all_values()
     _check_obj(objs, table, gs)
+    _update_merge_report(objs)
