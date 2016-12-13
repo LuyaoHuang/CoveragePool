@@ -435,6 +435,8 @@ def rescan_table():
 
             s_exist_cfs = set(exist_cfs)
             new_objs = [i for i in cf_objs if i not in s_exist_cfs]
+            if not new_objs:
+                continue
             merge_coverage_report.delay([i.id for i in new_objs], '/tmp/tmpdir', obj.id)
 
     objs = CoverageFile.objects.all()
