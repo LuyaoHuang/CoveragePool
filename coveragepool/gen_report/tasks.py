@@ -364,7 +364,7 @@ def merge_coverage_report(obj_ids, output_dir, merge_id=None):
 
     if merge_id:
         obj = CoverageReport.objects.get(id=merge_id)
-        only_version = obj.version.split('.')[:-1]
+        only_version = '.'.join(obj.version.split('.')[:-1])
         if not obj.tracefile:
             coverage_files.extend([i.coveragefile.path for i in obj.coverage_files.all()])
         else:
@@ -375,7 +375,8 @@ def merge_coverage_report(obj_ids, output_dir, merge_id=None):
         coverage_files.append(obj.coveragefile.path)
         if only_version:
             if only_version != '.'.join(obj.version.split('.')[:-1]):
-                raise Exception('Not support merge different coverage')
+                raise Exception('Not support merge different coverage: %s != %s',
+                                only_version, '.'.join(obj.version.split('.')[:-1]))
         else:
             only_version = '.'.join(obj.version.split('.')[:-1])
 
