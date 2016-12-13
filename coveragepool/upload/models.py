@@ -26,15 +26,15 @@ class CoverageReport(models.Model):
     date = models.DateTimeField()
     path = models.CharField(max_length=100, blank=True, null=True)
     url = models.CharField(max_length=100, blank=True, null=True)
-    tracefile = models.FileField(null=True)
+    tracefile = models.FileField(null=True, upload_to=content_file_name)
     rules = models.CharField(max_length=100, blank=True, null=True)
     coverage_files = models.ManyToManyField(CoverageFile)
 
     def save_tracefile(self, tracefile):
+        name = 'merged_report_%d' % self.id
         with open(tracefile) as fp:
             myfile = File(fp)
-        name = 'merged_report_%d.tf' % self.id
-        self.tracefile.save(name, myfile)
+            self.tracefile.save(name, myfile)
 
 @receiver(post_delete, sender=CoverageFile)
 def CoverageFile_post_delete_handler(sender, instance, **kwargs):

@@ -321,7 +321,7 @@ class MergeCoverageReportCB(CallbackTask):
             cr.path = target
             cr.url = url
 
-            old_tracefile = cr.tracefile
+            old_tracefile = cr.tracefile.path
             cr.save_tracefile('/tmp/merge.tracefile')
             cr.save()
 
@@ -339,7 +339,7 @@ class MergeCoverageReportCB(CallbackTask):
             if old_path:
                 shutil.rmtree(old_path, True)
             if old_tracefile:
-                old_tracefile.delete(save=False)
+                os.unlink(old_tracefile)
 
         except Exception as detail:
             logger.error('Fail to finish successed work: %s' % detail)
@@ -349,9 +349,10 @@ class MergeCoverageReportCB(CallbackTask):
                 if old_path and cr.path != old_path:
                     shutil.rmtree(cr.path, True)
                     shutil.move(old_path, cr.path)
-                if old_tracefile and cr.tracefile != old_tracefile:
+                if old_tracefile and cr.tracefile.path != old_tracefile:
                     cr.tracefile.delete(save=False)
-                    cr.tracefile = old_tracefile
+                    cr.save_tracefile(old_tracefile)
+                    os.unlink(old_tracefile)
                 for obj in objs:
                     cr.coverage_files.remove(obj)
 
