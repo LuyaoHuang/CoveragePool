@@ -302,10 +302,15 @@ class MergeCoverageReportCB(CallbackTask):
             cr = CoverageReport.objects.create(name='Merged report',
                     version=objs[0].version, date=date)
 
+        old_path = None
+        old_tracefile = None
         try:
             for obj in objs:
                 cr.coverage_files.add(obj)
             target = os.path.join(base_dir, str(cr.id))
+            if os.path.exist(target):
+                old_path = os.path.join(base_dir, '%stmp' % str(cr.id))
+                shutil.move(target, old_path)
             shutil.copytree(output_dir, target)
 
             if base_url:
@@ -313,10 +318,7 @@ class MergeCoverageReportCB(CallbackTask):
             else:
                 url = 'Need set COVERAGE_BASE_URL in settings'
 
-            old_path = cr.path
             cr.path = target
-
-            old_url = cr.url
             cr.url = url
 
             old_tracefile = cr.tracefile
@@ -346,7 +348,7 @@ class MergeCoverageReportCB(CallbackTask):
             else:
                 if old_path and cr.path != old_path:
                     shutil.rmtree(cr.path, True)
-                    cr.path = old_path
+                    shutil.move(old_path, cr.path)
                 if old_tracefile and cr.tracefile != old_tracefile:
                     cr.tracefile.delete(save=False)
                     cr.tracefile = old_tracefile
