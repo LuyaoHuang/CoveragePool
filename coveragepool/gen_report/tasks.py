@@ -321,7 +321,8 @@ class MergeCoverageReportCB(CallbackTask):
             cr.path = target
             cr.url = url
 
-            old_tracefile = cr.tracefile.path
+            if cr.tracefile:
+                old_tracefile = cr.tracefile.path
             cr.save_tracefile('/tmp/merge.tracefile')
             cr.save()
 
@@ -336,6 +337,7 @@ class MergeCoverageReportCB(CallbackTask):
                 gs.add_new_row_by_dict(info_dict)
             else:
                 gs.search_update_by_dict({'Id': mobj_id}, info_dict)
+
             if old_path:
                 shutil.rmtree(old_path, True)
             if old_tracefile:
@@ -349,7 +351,7 @@ class MergeCoverageReportCB(CallbackTask):
                 if old_path and cr.path != old_path:
                     shutil.rmtree(cr.path, True)
                     shutil.move(old_path, cr.path)
-                if old_tracefile and cr.tracefile.path != old_tracefile:
+                if old_tracefile and cr.tracefile and cr.tracefile.path != old_tracefile:
                     cr.tracefile.delete(save=False)
                     cr.save_tracefile(old_tracefile)
                     os.unlink(old_tracefile)
