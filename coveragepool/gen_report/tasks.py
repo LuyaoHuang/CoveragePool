@@ -34,7 +34,8 @@ def prepare_gsmgr(project=None, sheet=None):
     if gs_key:
         gs = GoogleSheetMGR(gs_key, json_file=gs_json_file, sheet=sheet)
     else:
-        raise Exception("Need set GoogleSheet key in project object or in settings")
+        # TODO: logging
+        return
 
     return gs
 
@@ -80,12 +81,13 @@ class CoverageReportCB(CallbackTask):
             cr.url = url
             cr.save()
 
-            if url:
-                gs.search_update_by_dict({'Id': obj.id},
-                                         {'Coverage Report': url})
-            else:
-                gs.search_update_by_dict({'Id': obj.id},
-                                         {'Coverage Report': 'Sucess'})
+            if gs:
+                if url:
+                    gs.search_update_by_dict({'Id': obj.id},
+                                             {'Coverage Report': url})
+                else:
+                    gs.search_update_by_dict({'Id': obj.id},
+                                             {'Coverage Report': 'Sucess'})
         except Exception as detail:
             cr.delete()
             logger.error('Fail to finish successed work: %s' % detail)
@@ -95,8 +97,9 @@ class CoverageReportCB(CallbackTask):
         obj_id, output_dir = args
         obj = CoverageFile.objects.get(id=obj_id)
         gs = prepare_gsmgr(obj.project)
-        gs.search_update_by_dict({'Id': obj.id},
-                                 {'Coverage Report': 'Fail to generate report'})
+        if gs:
+            gs.search_update_by_dict({'Id': obj.id},
+                                     {'Coverage Report': 'Fail to generate report'})
 
 def convert_tracefile(file_path, check_all=True):
     # Work around someone's stupid patch :D
@@ -354,16 +357,17 @@ class MergeCoverageReportCB(CallbackTask):
             cr.save_tracefile('/tmp/merge.tracefile')
             cr.save()
 
-            info_dict = {"Id": cr.id,
-                         "Name": cr.name,
-                         "Version": cr.version,
-                         "Date": cr.date.strftime("%Y-%m-%d %H:%M:%S"),
-                         "Merged from": '\n'.join([obj.name for obj in cr.coverage_files.all()]),
-                         "Coverage Report": url}
-            if not mobj_id:
-                gs.add_new_row_by_dict(info_dict)
-            else:
-                gs.search_update_by_dict({'Id': mobj_id}, info_dict)
+            if gs:
+                info_dict = {"Id": cr.id,
+                             "Name": cr.name,
+                             "Version": cr.version,
+                             "Date": cr.date.strftime("%Y-%m-%d %H:%M:%S"),
+                             "Merged from": '\n'.join([obj.name for obj in cr.coverage_files.all()]),
+                             "Coverage Report": url}
+                if not mobj_id:
+                    gs.add_new_row_by_dict(info_dict)
+                else:
+                    gs.search_update_by_dict({'Id': mobj_id}, info_dict)
 
             if old_path:
                 shutil.rmtree(old_path, True)
@@ -469,14 +473,16 @@ def rescan_table():
     def _rescan_table_internal(project):
         objs = CoverageFile.objects.filter(project=project)
         gs = prepare_gsmgr(project)
-        table = gs.get_all_values()
-        _check_obj(objs, table, gs)
+        if gs:
+            table = gs.get_all_values()
+            _check_obj(objs, table, gs)
 
         objs = CoverageReport.objects.filter(project=project)
         gs = prepare_gsmgr(project, sheet=1)
-        table = gs.get_all_values()
-        _check_obj(objs, table, gs)
-        _update_merge_report(objs)
+        if gs:
+            table = gs.get_all_values()
+            _check_obj(objs, table, gs)
+            _update_merge_report(objs)
 
     for project in Project.objects.all():
         _rescan_table_internal(project)
