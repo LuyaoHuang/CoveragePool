@@ -7,7 +7,6 @@ from celery.utils.log import get_task_logger
 import os
 import re
 import subprocess
-import platform
 import shutil
 import tempfile
 from dateutil import parser
@@ -19,10 +18,25 @@ django.setup()
 from django.conf import settings
 
 from upload.google_api import GoogleSheetMGR
-from upload.models import CoverageFile, CoverageReport
+from upload.models import CoverageFile, CoverageReport, Project
 from .utils import run_cmd, parse_package_name, check_package_version, trans_distro_info
 
 logger = get_task_logger(__name__)
+
+def prepare_gsmgr(project=None, sheet=None):
+    gs_key = getattr(settings, "COVERAGE_GS_KEY", None)
+    gs_json_file = getattr(settings, "COVERAGE_GS_JSON_FILE", None)
+
+    if project:
+        gs_key = project.gs_key
+        gs_json_file = project.gs_json_file
+
+    if gs_key:
+        gs = GoogleSheetMGR(gs_key, json_file=gs_json_file, sheet=sheet)
+    else:
+        raise Exception("Need set GoogleSheet key in project object or in settings")
+
+    return gs
 
 class CallbackTask(Task):
     def on_success(self, retval, task_id, args, kwargs):
@@ -35,8 +49,15 @@ class CoverageReportCB(CallbackTask):
         super(CoverageReportCB, self).on_success(retval, task_id, args, kwargs)
         obj_id, output_dir = args
         obj = CoverageFile.objects.get(id=obj_id)
+
         base_dir = getattr(settings, "COVERAGE_BASE_DIR", None)
         base_url = getattr(settings, "COVERAGE_BASE_URL", None)
+
+        if obj.project:
+            base_dir = obj.project.base_dir if obj.project.base_dir else base_dir
+            base_url = obj.project.base_url if obj.project.base_url else base_url
+
+        gs = prepare_gsmgr(obj.project)
 
         if not base_dir:
             return
@@ -59,7 +80,6 @@ class CoverageReportCB(CallbackTask):
             cr.url = url
             cr.save()
 
-            gs = GoogleSheetMGR()
             if url:
                 gs.search_update_by_dict({'Id': obj.id},
                                          {'Coverage Report': url})
@@ -74,7 +94,7 @@ class CoverageReportCB(CallbackTask):
         super(CoverageReportCB, self).on_failure(exc, task_id, args, kwargs, einfo)
         obj_id, output_dir = args
         obj = CoverageFile.objects.get(id=obj_id)
-        gs = GoogleSheetMGR()
+        gs = prepare_gsmgr(obj.project)
         gs.search_update_by_dict({'Id': obj.id},
                                  {'Coverage Report': 'Fail to generate report'})
 
@@ -291,6 +311,14 @@ class MergeCoverageReportCB(CallbackTask):
         base_url = getattr(settings, "COVERAGE_BASE_URL", None)
 
         objs = [CoverageFile.objects.get(id=obj_id) for obj_id in obj_ids]
+        # TODO: need check if all have one project ?
+        obj = objs[0]
+
+        if obj.project:
+            base_dir = obj.project.base_dir if obj.project.base_dir else base_dir
+            base_url = obj.project.base_url if obj.project.base_url else base_url
+
+        gs = prepare_gsmgr(obj.project, sheet=1)
 
         if not base_dir:
             return
@@ -326,7 +354,6 @@ class MergeCoverageReportCB(CallbackTask):
             cr.save_tracefile('/tmp/merge.tracefile')
             cr.save()
 
-            gs = GoogleSheetMGR(sheet=1)
             info_dict = {"Id": cr.id,
                          "Name": cr.name,
                          "Version": cr.version,
@@ -439,13 +466,18 @@ def rescan_table():
                 continue
             merge_coverage_report.delay([i.id for i in new_objs], '/tmp/tmpdir', obj.id)
 
-    objs = CoverageFile.objects.all()
-    gs = GoogleSheetMGR()
-    table = gs.get_all_values()
-    _check_obj(objs, table, gs)
+    def _rescan_table_internal(project):
+        objs = CoverageFile.objects.filter(project=project)
+        gs = prepare_gsmgr(project)
+        table = gs.get_all_values()
+        _check_obj(objs, table, gs)
 
-    objs = CoverageReport.objects.all()
-    gs = GoogleSheetMGR(sheet=1)
-    table = gs.get_all_values()
-    _check_obj(objs, table, gs)
-    _update_merge_report(objs)
+        objs = CoverageReport.objects.filter(project=project)
+        gs = prepare_gsmgr(project, sheet=1)
+        table = gs.get_all_values()
+        _check_obj(objs, table, gs)
+        _update_merge_report(objs)
+
+    for project in Project.objects.all():
+        _rescan_table_internal(project)
+    _rescan_table_internal(None)

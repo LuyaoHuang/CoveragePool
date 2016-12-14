@@ -127,6 +127,8 @@ STATIC_URL = '/static/'
 
 CELERY_RESULT_BACKEND = 'amqp://localhost'
 
+# CoveragePool extra settings
+
 COVERAGE_BASE_DIR = ''
 
 COVERAGE_BASE_URL = ''
@@ -135,3 +137,7 @@ COVERAGE_BASE_URL = ''
 COVERAGE_TAG_FMT = ''
 
 COVERAGE_GIT_REPO = ''
+
+COVERAGE_GS_KEY = ''
+
+COVERAGE_GS_JSON_FILE = ''

@@ -21,7 +21,7 @@ class CoverageReportAdmin(admin.ModelAdmin):
 admin.site.register(CoverageReport, CoverageReportAdmin)
 
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ('name', 'base_dir', 'base_url',
+    list_display = ('name', 'base_dir', 'base_url', 'pkg_name',
                     'tag_fmt', 'git_repo', 'gs_key', 'gs_json_file')
 
 admin.site.register(Project, ProjectAdmin)

@@ -16,6 +16,7 @@ def content_file_name(instance, filename):
 # Create your models here.
 class Project(models.Model):
     name = models.CharField(max_length=100, unique=True)
+    pkg_name = models.CharField(max_length=100, null=True)
     base_dir = models.CharField(max_length=100, null=True)
     base_url = models.CharField(max_length=100, null=True)
     tag_fmt = models.CharField(max_length=100, null=True)

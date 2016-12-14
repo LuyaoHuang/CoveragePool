@@ -2,7 +2,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 class GoogleSheetMGR(object):
-    def __init__(self, key="1wGH-K5uLpLS889BD-_SYJX18fNaFoJSyl5iP06oWFlw", sheet=None, json_file=None):
+    def __init__(self, key, sheet=None, json_file=None):
         self.key = key
         self.sheet = sheet
         if json_file:
