@@ -126,6 +126,8 @@ def gen_coverage_report(obj_id, output_dir):
     shutil.rmtree(output_dir, True)
     # TODO: Ensuring a task is only executed one at a time
     obj = CoverageFile.objects.get(id=obj_id)
+    if not obj.project:
+        raise Exception('Not support CoverageFile without project')
     params = load_settings(obj.project)
     helper = load_helper_cls(obj.project.name)
     helper.prepare_env(obj.version, params)
@@ -243,6 +245,8 @@ def merge_coverage_report(obj_ids, output_dir, merge_id=None):
         return
 
     # TODO: check have the same project
+    if not obj.project:
+        raise Exception('Not support CoverageFile without project')
     params = load_settings(obj.project)
     helper = load_helper_cls(obj.project.name)
     helper.prepare_env(obj.version, params)
