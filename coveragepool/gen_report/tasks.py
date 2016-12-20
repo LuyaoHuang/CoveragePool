@@ -136,7 +136,11 @@ def gen_coverage_report(obj_id, output_dir):
 class MergeCoverageReportCB(CallbackTask):
     def on_success(self, retval, task_id, args, kwargs):
         super(MergeCoverageReportCB, self).on_success(retval, task_id, args, kwargs)
-        obj_ids, output_dir, mobj_id = args
+        if len(args) > 2:
+            obj_ids, output_dir, mobj_id = args
+        else:
+            obj_ids, output_dir = args
+            mobj_id = None
 
         objs = [CoverageFile.objects.get(id=obj_id) for obj_id in obj_ids]
         # TODO: need check if all have one project ?
