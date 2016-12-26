@@ -221,7 +221,6 @@ class MergeCoverageReportCB(CallbackTask):
 
 @task(base=MergeCoverageReportCB)
 def merge_coverage_report(obj_ids, output_dir, merge_id=None):
-    #TODO: support convert report
     only_version = None
     coverage_files = []
     shutil.rmtree(output_dir, True)
@@ -229,12 +228,19 @@ def merge_coverage_report(obj_ids, output_dir, merge_id=None):
 
     if merge_id:
         obj = CoverageReport.objects.get(id=merge_id)
+        ext_obj_ids = [i.id for i in obj.coverage_files.all()]
+        if set(ext_obj_ids) & set(obj_ids):
+            raise Exception("Found unexpected merge request, %s already "
+                            "been merged in CoverageReport obj (id %d)" %
+                            (str(list(set(ext_obj_ids) & set(obj_ids))), merge_id))
+
         only_version = '.'.join(obj.version.split('.')[:-1])
         if not obj.tracefile:
             coverage_files.extend([i.coveragefile.path for i in obj.coverage_files.all()])
         else:
             coverage_files.append(obj.tracefile.path)
 
+    #TODO: support convert report
     for obj_id in obj_ids:
         obj = CoverageFile.objects.get(id=obj_id)
         coverage_files.append(obj.coveragefile.path)
