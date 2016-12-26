@@ -141,3 +141,7 @@ COVERAGE_GIT_REPO = ''
 COVERAGE_GS_KEY = ''
 
 COVERAGE_GS_JSON_FILE = ''
+
+# Limit media directroy size, only support bytes
+# 0 is unlimited
+COVERAGE_MEDIA_LIMIT_SIZE = 0

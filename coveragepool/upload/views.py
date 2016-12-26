@@ -1,10 +1,13 @@
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
-from .models import CoverageFile
-from dateutil import parser
-import time
 from django.views.decorators.csrf import csrf_exempt
 from django.forms.models import model_to_dict
+from django.conf import settings
+
+import time
+import os
+from dateutil import parser
+from .models import CoverageFile
 from .google_api import GoogleSheetMGR
 
 # Create your views here.
@@ -25,6 +28,29 @@ def request_check(request, check_dict):
     return 0, "Pass"
 
 
+# TODO: move to utils module
+def get_size(start_path = '.'):
+    """
+    Check directroy size
+    """
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(start_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            total_size += os.path.getsize(fp)
+        for dir in dirnames:
+            dir_path = os.path.join(dirpath, dir)
+            total_size += get_size(dir_path)
+        return total_size
+
+def check_media_limit():
+    media_dir = getattr(settings, "MEDIA_ROOT", None)
+    media_limit = getattr(settings, "COVERAGE_MEDIA_LIMIT_SIZE", None)
+    if not media_limit:
+        return False
+    return get_size(media_dir) > int(media_limit)
+
+
 @csrf_exempt
 def coveragefile(request):
     ret, msg = request_check(request, {'post': ['name', 'version', 'user_name'],
@@ -43,6 +69,11 @@ def coveragefile(request):
                                      coveragefile=request.FILES['coveragefile'],
                                      date=date, version=version)
     cf.save()
+    if check_media_limit():
+        cf.delete()
+        return HttpResponse("ERROR: Fail to upload file: Media directroy size limited",
+                            content_type="text/plain; charset=utf-8")
+
     gs = GoogleSheetMGR()
     gs.add_new_row_by_dict({"Id": cf.id,
                             "Name": name,
@@ -68,6 +99,7 @@ def listfile(request):
         ret.append(tmp_json)
 
     return JsonResponse({'data': ret})
+
 
 def sync_data(request):
     objs = CoverageFile.objects.all()
