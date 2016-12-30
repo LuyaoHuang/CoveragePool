@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import tempfile
 from .utils import run_cmd, parse_package_name, check_package_version, trans_distro_info
@@ -39,24 +40,28 @@ class RpmCoverageEnv(BaseCoverageEnv):
         run_cmd(pre_cmd)
         run_cmd(cmd)
 
+def prepare_git_repo(git_repo, base_dir, work_dir, commit=None):
+    if os.path.exists(base_dir):
+        git_dir = os.path.join(base_dir, '.git')
+        cmd = 'git --git-dir %s --work-tree %s pull' % (git_dir, base_dir)
+    else:
+        cmd = 'git clone %s %s' % (git_repo, base_dir)
+
+    run_cmd(cmd)
+    if os.path.exists(work_dir):
+        shutil.rmtree(work_dir)
+    shutil.copytree(base_dir, work_dir)
+
+    if commit:
+        git_dir = os.path.join(work_dir, '.git')
+        cmd2 = 'git --git-dir %s --work-tree %s checkout -f %s' % (git_dir, work_dir, commit)
+        run_cmd(cmd2)
+
 class GitCoverageEnv(BaseCoverageEnv):
     def prepare_env(self, name, work_dir, git_repo,
                     git_tag, base_dir='/usr/share/coveragepool/'):
         Base_dir = os.path.join(base_dir, name)
-        if os.path.exists(Base_dir):
-            git_dir = os.path.join(Base_dir, '.git')
-            cmd = 'git --git-dir %s --work-tree %s pull' % (git_dir, Base_dir)
-        else:
-            cmd = 'git clone %s %s' % (git_repo, Base_dir)
-
-        run_cmd(cmd)
-        if os.path.exists(work_dir):
-            shutil.rmtree(work_dir)
-        shutil.copytree(Base_dir, work_dir)
-
-        git_dir = os.path.join(work_dir, '.git')
-        cmd2 = 'git --git-dir %s --work-tree %s checkout -f %s' % (git_dir, work_dir, git_tag)
-        run_cmd(cmd2)
+        prepare_git_repo(git_repo, Base_dir, work_dir, git_tag)
 
     def get_git_diff(self, work_dir, src_tag, tgt_tag):
         git_dir = os.path.join(work_dir, '.git')
@@ -69,6 +74,34 @@ class GitCoverageEnv(BaseCoverageEnv):
         tmp_file.close()
 
         return tmp_file.name
+
+class DistGitCoverageEnv(BaseCoverageEnv):
+    @staticmethod
+    def apply_patch(name, dist_work_dir, work_dir):
+        """
+        If not work as expected, override this function
+        """
+        spec_file = os.path.join(dist_work_dir, '%s.spec' % name)
+        git_dir = os.path.join(work_dir, '.git')
+        with open(spec_file) as fp:
+            lines = fp.readlines()
+        for line in lines:
+            match = re.match(r"^Patch([0-9]+): (.+)", line)
+            if match:
+                _, patch_name = match.groups()
+                patch_file = os.path.join(dist_work_dir, patch_name)
+                cmd = 'git --git-dir %s --work-tree %s am -3 %s' % (git_dir, work_dir, patch_file)
+                run_cmd(cmd)
+
+    def prepare_env(self, name, work_dir, git_repo,
+                    git_tag, dist_git_repo, dist_git_tag,
+                    base_dir='/usr/share/coveragepool/'):
+        Base_dir = os.path.join(base_dir, name)
+        prepare_git_repo(git_repo, Base_dir, work_dir, git_tag)
+        Base_dir = os.path.join(base_dir, '%s-dist-git' % name)
+        dist_work_dir = tempfile.mkdtemp()
+        prepare_git_repo(dist_git_repo, Base_dir, dist_work_dir, dist_git_tag)
+        self.apply_patch(name, dist_work_dir, work_dir)
 
 class CCoverageHelper(BaseCoverageHelper):
     """
