@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import tempfile
+import subprocess
 from .utils import run_cmd, parse_package_name, check_package_version, trans_distro_info
 
 class BaseCoverageHelper(object):
@@ -39,6 +40,34 @@ class RpmCoverageEnv(BaseCoverageEnv):
         cmd = 'yum install -y %s' % (' '.join(install_list))
         run_cmd(pre_cmd)
         run_cmd(cmd)
+
+class Rpm2cpioCoverageEnv(BaseCoverageEnv):
+    def prepare_env(self, packages):
+        if len(packages) > 1:
+            raise Exception("Not support more than one package")
+        package = packages[0]
+        tmp_work_dir = tempfile.mkdtemp()
+        try:
+            cmd = 'yumdownloader -q --urls %s' % package
+            out = run_cmd(cmd)
+
+            old_path = os.getcwd()
+            try:
+                os.chdir(tmp_work_dir)
+                cmd = 'wget %s' % out[:-1]
+                run_cmd(cmd)
+                pkg = os.listdir(tmp_work_dir)[0]
+                p = subprocess.Popen(('rpm2cpio', pkg), stdout=subprocess.PIPE)
+                subprocess.check_output(('cpio', '-ivdm'), stdin=p.stdout, stderr=subprocess.STDOUT)
+                os.remove(pkg)
+                return tmp_work_dir
+            finally:
+                os.chdir(old_path)
+
+        except Exception as e:
+            shutil.rmtree(tmp_work_dir)
+            raise e
+
 
 def prepare_git_repo(git_repo, base_dir, work_dir, commit=None):
     if os.path.exists(base_dir):
