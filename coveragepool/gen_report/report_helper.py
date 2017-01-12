@@ -3,6 +3,7 @@ import re
 import shutil
 import tempfile
 import subprocess
+from contextlib import contextmanager
 from .utils import run_cmd, parse_package_name, check_package_version, trans_distro_info
 
 class BaseCoverageHelper(object):
@@ -21,7 +22,7 @@ class BaseCoverageEnv(object):
     def prepare_env(self):
         raise NotImplementedError('prepare_env')
     def clean_up_env(self):
-        raise NotImplementedError('clean_up_env')
+        pass
 
 class RpmCoverageEnv(BaseCoverageEnv):
     def prepare_env(self, packages):
@@ -46,31 +47,30 @@ class Rpm2cpioCoverageEnv(BaseCoverageEnv):
         self.tmp_work_dir = None
 
     def prepare_env(self, packages):
-        if len(packages) > 1:
-            raise Exception("Not support more than one package")
-        package = packages[0]
         tmp_work_dir = tempfile.mkdtemp()
-        try:
-            cmd = 'yumdownloader -q --urls %s' % package
-            out = run_cmd(cmd)
-
-            old_path = os.getcwd()
+        for package in packages:
             try:
-                os.chdir(tmp_work_dir)
-                cmd = 'wget %s' % out[:-1]
-                run_cmd(cmd)
-                pkg = os.listdir(tmp_work_dir)[0]
-                p = subprocess.Popen(('rpm2cpio', pkg), stdout=subprocess.PIPE)
-                subprocess.check_output(('cpio', '-ivdm'), stdin=p.stdout, stderr=subprocess.STDOUT)
-                os.remove(pkg)
-                self.tmp_work_dir = tmp_work_dir
-                return tmp_work_dir
-            finally:
-                os.chdir(old_path)
+                cmd = 'yumdownloader -q --urls %s' % package
+                out = run_cmd(cmd)
 
-        except Exception as e:
-            shutil.rmtree(tmp_work_dir)
-            raise e
+                old_path = os.getcwd()
+                try:
+                    os.chdir(tmp_work_dir)
+                    pkg = '%s.rpm' % package
+                    cmd = 'wget %s -O %s' % (out[:-1], pkg)
+                    run_cmd(cmd)
+                    p = subprocess.Popen(('rpm2cpio', pkg), stdout=subprocess.PIPE)
+                    subprocess.check_output(('cpio', '-ivdm'), stdin=p.stdout, stderr=subprocess.STDOUT)
+                    os.remove(pkg)
+                finally:
+                    os.chdir(old_path)
+
+            except Exception as e:
+                shutil.rmtree(tmp_work_dir)
+                raise e
+
+        self.tmp_work_dir = tmp_work_dir
+        return tmp_work_dir
 
     def clean_up_env(self):
         if self.tmp_work_dir:
@@ -198,10 +198,78 @@ class CCoverageHelper(BaseCoverageHelper):
         cmd = 'lcov --diff %s %s -o %s' % (src_tf, diff_file, tgt_tf)
         run_cmd(cmd)
 
+class PythonCoverageHelper(BaseCoverageHelper):
+    def __init__(self):
+        self.cfg_file = None
+
+    def gen_config_file(self, config_list):
+        """
+        Support config type:
+        1. paths: {'type': 'paths', 'info': [path1, path2 ...]}
+        """
+        strs = ''
+        for i in config_list:
+            if i['type'] == 'paths':
+                strs += '[paths]\nsource =\n'
+                for path in i['info']:
+                    strs += '    %s\n' % path
+                continue
+            else:
+                raise Exception('Unsupport configure type')
+
+        tmp_file = tempfile.NamedTemporaryFile(
+            mode='w', suffix='.tmp', prefix='coverage-cfg-',
+            delete=False)
+        tmp_file.write(strs)
+        tmp_file.close()
+        self.cfg_file = tmp_file.name
+
+    def gen_report(self, tracefile, output_dir, ig_err_src=False):
+        run_cmd('coverage erase')
+
+        with open(tracefile) as fp:
+            tmp_file = tempfile.NamedTemporaryFile(
+                mode='w', suffix='.tmp', prefix='tracefile-',
+                delete=False)
+            tmp_file.write(fp.read())
+            tmp_file.close()
+
+        cmd = 'coverage combine'
+        if self.cfg_file:
+            cmd += ' --rcfile=%s' % self.cfg_file
+        cmd += ' %s' % tmp_file.name
+        run_cmd(cmd)
+
+        cmd = 'coverage html -d %s' % output_dir
+        if ig_err_src:
+            cmd += ' -i'
+        run_cmd(cmd)
+
+    def merge_tracefile(self, tracefiles, merged_tracefile):
+        run_cmd('coverage erase')
+
+        cmd = 'coverage combine'
+        if self.cfg_file:
+            cmd += ' --rcfile=%s' % self.cfg_file
+        for i in tracefiles:
+            with open(i) as fp:
+                tmp_file = tempfile.NamedTemporaryFile(
+                    mode='w', suffix='.tmp', prefix='tracefile-',
+                    delete=False)
+                tmp_file.write(fp.read())
+                tmp_file.close()
+            cmd += ' %s' % tmp_file.name
+
+        run_cmd(cmd)
+        shutil.copy('.coverage', merged_tracefile)
+
+    def convert_tracefile(self, src_tf, tgt_tf, diff_file):
+        raise Exception('Not support convert trace file')
+
 class LibvirtCoverageHelper(CCoverageHelper):
     def __init__(self, config_params):
-        self.tag_fmt = config_params['tag_fmt']
-        self.git_repo = config_params['git_repo']
+        self.tag_fmt = config_params.get('tag_fmt')
+        self.git_repo = config_params.get('git_repo')
         self.env = None
         self.old_src_dir = None
         self.new_src_dir = None
@@ -210,6 +278,7 @@ class LibvirtCoverageHelper(CCoverageHelper):
         shutil.rmtree(work_dir)
         run_cmd('virtcov -s')
 
+    @contextmanager
     def prepare_env(self, version_name):
         tag_fmt = self.tag_fmt
         git_repo = self.git_repo
@@ -234,16 +303,19 @@ class LibvirtCoverageHelper(CCoverageHelper):
 
             self.old_src_dir = work_dir
             self.new_src_dir = os.path.join(tmp_work_dir, src_dir)
-            return
         except Exception as e:
             #TODO: logging
-            pass
 
-        # Git base
-        self.env = GitCoverageEnv(name, work_dir, git_repo)
-        git_tag = tag_fmt.format(name, version, release, arch)
-        self.env.prepare_env(name, git_tag)
-        self._extra_prepare(work_dir)
+            # Git base
+            self.env = GitCoverageEnv(name, work_dir, git_repo)
+            git_tag = tag_fmt.format(name, version, release, arch)
+            self.env.prepare_env(name, git_tag)
+            self._extra_prepare(work_dir)
+
+            yield
+        finally:
+            if self.env:
+                self.env.clean_up_env()
 
     def periodic_check(self):
         raise NotImplementedError('periodic_check')
@@ -342,3 +414,39 @@ class LibvirtCoverageHelper(CCoverageHelper):
                          os.path.join(work_dir, 'src/lxc/lxc_protocol.c'),)
         out = run_cmd(cmd)
 
+class VirtinstCoverageHelper(PythonCoverageHelper):
+    def __init__(self, config_params):
+        self.tag_fmt = config_params.get('tag_fmt')
+        self.git_repo = config_params.get('git_repo')
+        self.env = None
+
+    @contextmanager
+    def prepare_env(self, version_name):
+        tag_fmt = self.tag_fmt
+        git_repo = self.git_repo
+
+        name, version, release, arch = parse_package_name(version_name)
+
+        self.env = Rpm2cpioCoverageEnv()
+        try:
+            if 'el6' in release:
+                tmp_work_dir = self.env.prepare_env(
+                        ['python-virtinst-%s-%s' % (version, release)])
+            elif 'el7' in release:
+                tmp_work_dir = self.env.prepare_env(
+                        ['virt-install-%s-%s' % (version, release),
+                         'virt-manager-common-%s-%s' % (version, release)])
+            else:
+                raise Exception('Unsupport distro type')
+
+            tmp_work_dir = os.path.join(tmp_work_dir, 'usr/')
+            config_list = [{'type': 'paths',
+                            'info': [tmp_work_dir, '/usr/']},]
+            PythonCoverageHelper.gen_config_file(self, config_list)
+
+            yield
+        finally:
+            self.env.clean_up_env()
+
+    def gen_report(self, tracefile, output_dir):
+        PythonCoverageHelper.gen_report(self, tracefile, output_dir, True)

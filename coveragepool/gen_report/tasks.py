@@ -130,8 +130,8 @@ def gen_coverage_report(obj_id, output_dir):
         raise Exception('Not support CoverageFile without project')
     params = load_settings(obj.project)
     helper = load_helper_cls(obj.project.name, params)
-    helper.prepare_env(obj.version)
-    helper.gen_report(obj.coveragefile.path, output_dir)
+    with helper.prepare_env(obj.version):
+        helper.gen_report(obj.coveragefile.path, output_dir)
 
 class MergeCoverageReportCB(CallbackTask):
     def on_success(self, retval, task_id, args, kwargs):
@@ -259,9 +259,9 @@ def merge_coverage_report(obj_ids, output_dir, merge_id=None):
         raise Exception('Not support CoverageFile without project')
     params = load_settings(obj.project)
     helper = load_helper_cls(obj.project.name, params)
-    helper.prepare_env(obj.version)
-    helper.merge_tracefile(coverage_files, tmp_tracefile)
-    helper.gen_report(tmp_tracefile, output_dir)
+    with helper.prepare_env(obj.version):
+        helper.merge_tracefile(coverage_files, tmp_tracefile)
+        helper.gen_report(tmp_tracefile, output_dir)
 
 #
 # Periodic Tasks
