@@ -60,6 +60,7 @@ class Rpm2cpioCoverageEnv(BaseCoverageEnv):
                 p = subprocess.Popen(('rpm2cpio', pkg), stdout=subprocess.PIPE)
                 subprocess.check_output(('cpio', '-ivdm'), stdin=p.stdout, stderr=subprocess.STDOUT)
                 os.remove(pkg)
+                self.tmp_work_dir = tmp_work_dir
                 return tmp_work_dir
             finally:
                 os.chdir(old_path)
@@ -68,6 +69,9 @@ class Rpm2cpioCoverageEnv(BaseCoverageEnv):
             shutil.rmtree(tmp_work_dir)
             raise e
 
+    def clean_up_env(self):
+        if getattr(self, 'tmp_work_dir', None):
+            shutil.rmtree(self.tmp_work_dir)
 
 def prepare_git_repo(git_repo, base_dir, work_dir, commit=None):
     if os.path.exists(base_dir):
@@ -153,6 +157,17 @@ class CCoverageHelper(BaseCoverageHelper):
         with open(file_path, 'w') as fp:
             fp.writelines(lines)
 
+    def copy_replace_tracefile(self, file_path, src, tgt, check_all=True):
+        with open(file_path) as fp:
+            tmp_file = tempfile.NamedTemporaryFile(
+                mode='w', suffix='.tmp', prefix='tracefile-',
+                delete=False)
+            tmp_file.write(fp.read())
+            tmp_file.close()
+
+        self.replace_tracefile(tmp_file.name, src, tgt, check_all)
+        return tmp_file.name
+
     def gen_report(self, tracefile, output_dir, ig_err_src=False):
         cmd = 'genhtml %s --output-directory %s' % (tracefile, output_dir)
         if ig_err_src:
@@ -171,7 +186,7 @@ class CCoverageHelper(BaseCoverageHelper):
         cmd = 'lcov --diff %s %s -o %s' % (src_tf, diff_file, tgt_tf)
         run_cmd(cmd)
 
-class LibvirtCoverageHelper(CCoverageHelper, GitCoverageEnv, RpmCoverageEnv):
+class LibvirtCoverageHelper(CCoverageHelper, GitCoverageEnv, Rpm2cpioCoverageEnv):
     def _prepare_virtcov_env(self, work_dir):
         shutil.rmtree(work_dir)
         run_cmd('virtcov -s')
@@ -185,22 +200,24 @@ class LibvirtCoverageHelper(CCoverageHelper, GitCoverageEnv, RpmCoverageEnv):
             raise Exception('This is not libvirt report: %s' % name)
 
         work_dir = '/mnt/coverage/BUILD/libvirt-%s/' % version
-        # RPM base
-        tgt_package = check_package_version(name)
-        if tgt_package == version_name:
-            self._prepare_virtcov_env(work_dir)
-            return
-
-        distro_info = trans_distro_info()
-        if distro_info in release:
-            if distro_info == 'el6':
-                packages = [version_name, 'libvirt-client', 'libvirt-devel']
+        try:
+            if 'el6' in release:
+                tmp_work_dir = Rpm2cpioCoverageEnv.prepare_env(self, 
+                        ['libvirt-devel-%s-%s' % (version, release)])
+                src_dir = 'usr/share/doc/libvirt-devel-%s/gcno/' % version
+            elif 'el7' in release:
+                tmp_work_dir = Rpm2cpioCoverageEnv.prepare_env(self,
+                        ['libvirt-docs-%s-%s' % (version, release)])
+                src_dir = 'usr/share/doc/libvirt-docs-%s/gcno/' % version
             else:
-                packages = [version_name, 'libvirt-docs']
+                raise Exception('Unsupport distro type')
 
-            RpmCoverageEnv.prepare_env(self, packages)
-            self._prepare_virtcov_env(work_dir)
+            self.old_src_dir = work_dir
+            self.new_src_dir = os.path.join(tmp_work_dir, src_dir)
             return
+        except Exception as e:
+            #TODO: logging
+            pass
 
         # Git base
         git_tag = tag_fmt.format(name, version, release, arch)
@@ -212,7 +229,13 @@ class LibvirtCoverageHelper(CCoverageHelper, GitCoverageEnv, RpmCoverageEnv):
 
     def gen_report(self, tracefile, output_dir):
         CCoverageHelper.replace_tracefile(self, tracefile, '/usr/coverage/', '/mnt/coverage/')
-        CCoverageHelper.gen_report(self, tracefile, output_dir, True)
+        new_src_dir = getattr(self, 'new_src_dir', None)
+        if new_src_dir:
+            tmp_tracefile = CCoverageHelper.copy_replace_tracefile(self, tracefile,
+                                                                   self.old_src_dir, new_src_dir)
+            CCoverageHelper.gen_report(self, tmp_tracefile, output_dir, True)
+        else:
+            CCoverageHelper.gen_report(self, tracefile, output_dir, True)
 
     def _extra_prepare(self, work_dir):
         cmd = 'perl -w %s -k remote REMOTE %s' % (os.path.join(work_dir, 'src/rpc/gendispatch.pl'),
