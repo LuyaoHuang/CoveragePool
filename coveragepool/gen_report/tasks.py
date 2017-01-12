@@ -51,12 +51,12 @@ def load_settings(project=None):
             ret[name] = val
     return ret
 
-def load_helper_cls(project_name):
+def load_helper_cls(project_name, params):
     cls_name = project_name.title() + 'CoverageHelper'
     try:
         cls = getattr(report_helper, cls_name)
         # TODO: add some params in class
-        return cls()
+        return cls(params)
     except:
         raise('Cannot find helper class in '
               'gen_report/report_helper.py, '
@@ -129,8 +129,8 @@ def gen_coverage_report(obj_id, output_dir):
     if not obj.project:
         raise Exception('Not support CoverageFile without project')
     params = load_settings(obj.project)
-    helper = load_helper_cls(obj.project.name)
-    helper.prepare_env(obj.version, params)
+    helper = load_helper_cls(obj.project.name, params)
+    helper.prepare_env(obj.version)
     helper.gen_report(obj.coveragefile.path, output_dir)
 
 class MergeCoverageReportCB(CallbackTask):
@@ -258,8 +258,8 @@ def merge_coverage_report(obj_ids, output_dir, merge_id=None):
     if not obj.project:
         raise Exception('Not support CoverageFile without project')
     params = load_settings(obj.project)
-    helper = load_helper_cls(obj.project.name)
-    helper.prepare_env(obj.version, params)
+    helper = load_helper_cls(obj.project.name, params)
+    helper.prepare_env(obj.version)
     helper.merge_tracefile(coverage_files, tmp_tracefile)
     helper.gen_report(tmp_tracefile, output_dir)
 

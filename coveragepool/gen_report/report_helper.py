@@ -42,6 +42,9 @@ class RpmCoverageEnv(BaseCoverageEnv):
         run_cmd(cmd)
 
 class Rpm2cpioCoverageEnv(BaseCoverageEnv):
+    def __init__(self):
+        self.tmp_work_dir = None
+
     def prepare_env(self, packages):
         if len(packages) > 1:
             raise Exception("Not support more than one package")
@@ -70,7 +73,7 @@ class Rpm2cpioCoverageEnv(BaseCoverageEnv):
             raise e
 
     def clean_up_env(self):
-        if getattr(self, 'tmp_work_dir', None):
+        if self.tmp_work_dir:
             shutil.rmtree(self.tmp_work_dir)
 
 def prepare_git_repo(git_repo, base_dir, work_dir, commit=None):
@@ -91,14 +94,19 @@ def prepare_git_repo(git_repo, base_dir, work_dir, commit=None):
         run_cmd(cmd2)
 
 class GitCoverageEnv(BaseCoverageEnv):
-    def prepare_env(self, name, work_dir, git_repo,
-                    git_tag, base_dir='/usr/share/coveragepool/'):
-        Base_dir = os.path.join(base_dir, name)
-        prepare_git_repo(git_repo, Base_dir, work_dir, git_tag)
+    def __init__(self, name, work_dir, git_repo, base_dir='/usr/share/coveragepool/'):
+        self.name = name
+        self.work_dir = work_dir
+        self.git_dir = os.path.join(work_dir, '.git')
+        self.git_repo = git_repo
+        self.Base_dir = os.path.join(base_dir, name)
 
-    def get_git_diff(self, work_dir, src_tag, tgt_tag):
-        git_dir = os.path.join(work_dir, '.git')
-        cmd = 'git --git-dir %s --work-tree %s diff %s %s' % (git_dir, work_dir, src_tag, tgt_tag)
+    def prepare_env(self, git_tag):
+        prepare_git_repo(self.git_repo, self.Base_dir, self.work_dir, git_tag)
+
+    def get_git_diff(self, src_tag, tgt_tag):
+        cmd = 'git --git-dir %s --work-tree %s diff %s %s' % (self.git_dir,
+                self.work_dir, src_tag, tgt_tag)
         out = run_cmd(cmd)
         tmp_file = tempfile.NamedTemporaryFile(
             mode='w', suffix='.tmp', prefix='diff-',
@@ -107,6 +115,10 @@ class GitCoverageEnv(BaseCoverageEnv):
         tmp_file.close()
 
         return tmp_file.name
+
+    def clean_up_env(self):
+        if os.path.exists(self.work_dir):
+            shutil.rmtree(self.work_dir)
 
 class DistGitCoverageEnv(BaseCoverageEnv):
     @staticmethod
@@ -186,14 +198,21 @@ class CCoverageHelper(BaseCoverageHelper):
         cmd = 'lcov --diff %s %s -o %s' % (src_tf, diff_file, tgt_tf)
         run_cmd(cmd)
 
-class LibvirtCoverageHelper(CCoverageHelper, GitCoverageEnv, Rpm2cpioCoverageEnv):
+class LibvirtCoverageHelper(CCoverageHelper):
+    def __init__(self, config_params):
+        self.tag_fmt = config_params['tag_fmt']
+        self.git_repo = config_params['git_repo']
+        self.env = None
+        self.old_src_dir = None
+        self.new_src_dir = None
+
     def _prepare_virtcov_env(self, work_dir):
         shutil.rmtree(work_dir)
         run_cmd('virtcov -s')
 
-    def prepare_env(self, version_name, params):
-        tag_fmt = params['tag_fmt']
-        git_repo = params['git_repo']
+    def prepare_env(self, version_name):
+        tag_fmt = self.tag_fmt
+        git_repo = self.git_repo
 
         name, version, release, arch = parse_package_name(version_name)
         if name != 'libvirt':
@@ -201,12 +220,13 @@ class LibvirtCoverageHelper(CCoverageHelper, GitCoverageEnv, Rpm2cpioCoverageEnv
 
         work_dir = '/mnt/coverage/BUILD/libvirt-%s/' % version
         try:
+            self.env = Rpm2cpioCoverageEnv()
             if 'el6' in release:
-                tmp_work_dir = Rpm2cpioCoverageEnv.prepare_env(self, 
+                tmp_work_dir = self.env.prepare_env(
                         ['libvirt-devel-%s-%s' % (version, release)])
                 src_dir = 'usr/share/doc/libvirt-devel-%s/gcno/' % version
             elif 'el7' in release:
-                tmp_work_dir = Rpm2cpioCoverageEnv.prepare_env(self,
+                tmp_work_dir = self.env.prepare_env(
                         ['libvirt-docs-%s-%s' % (version, release)])
                 src_dir = 'usr/share/doc/libvirt-docs-%s/gcno/' % version
             else:
@@ -220,8 +240,9 @@ class LibvirtCoverageHelper(CCoverageHelper, GitCoverageEnv, Rpm2cpioCoverageEnv
             pass
 
         # Git base
+        self.env = GitCoverageEnv(name, work_dir, git_repo)
         git_tag = tag_fmt.format(name, version, release, arch)
-        GitCoverageEnv.prepare_env(self, name, work_dir, git_repo, git_tag)
+        self.env.prepare_env(name, git_tag)
         self._extra_prepare(work_dir)
 
     def periodic_check(self):
@@ -229,10 +250,9 @@ class LibvirtCoverageHelper(CCoverageHelper, GitCoverageEnv, Rpm2cpioCoverageEnv
 
     def gen_report(self, tracefile, output_dir):
         CCoverageHelper.replace_tracefile(self, tracefile, '/usr/coverage/', '/mnt/coverage/')
-        new_src_dir = getattr(self, 'new_src_dir', None)
-        if new_src_dir:
+        if self.new_src_dir:
             tmp_tracefile = CCoverageHelper.copy_replace_tracefile(self, tracefile,
-                                                                   self.old_src_dir, new_src_dir)
+                                                                   self.old_src_dir, self.new_src_dir)
             CCoverageHelper.gen_report(self, tmp_tracefile, output_dir, True)
         else:
             CCoverageHelper.gen_report(self, tracefile, output_dir, True)
