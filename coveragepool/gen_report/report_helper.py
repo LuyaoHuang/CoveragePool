@@ -249,6 +249,7 @@ class PythonCoverageHelper(BaseCoverageHelper):
         run_cmd('coverage erase')
 
         cmd = 'coverage combine'
+        tmp_trace_files = []
         if self.cfg_file:
             cmd += ' --rcfile=%s' % self.cfg_file
         for i in tracefiles:
@@ -259,8 +260,15 @@ class PythonCoverageHelper(BaseCoverageHelper):
                 tmp_file.write(fp.read())
                 tmp_file.close()
             cmd += ' %s' % tmp_file.name
+            tmp_trace_files.append(tmp_file.name)
 
-        run_cmd(cmd)
+        try:
+            run_cmd(cmd)
+        except Exception as e:
+            for trace_file in tmp_trace_files:
+                os.unlink(trace_file)
+            raise e
+
         shutil.copy('.coverage', merged_tracefile)
 
     def convert_tracefile(self, src_tf, tgt_tf, diff_file):
