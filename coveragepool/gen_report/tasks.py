@@ -321,4 +321,4 @@ def rescan_table():
 
     for project in Project.objects.all():
         _rescan_table_internal(project)
-    _rescan_table_internal(None)
+    #_rescan_table_internal(None)
