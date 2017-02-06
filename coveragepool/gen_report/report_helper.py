@@ -317,7 +317,7 @@ class LibvirtCoverageHelper(CCoverageHelper):
             # Git base
             self.env = GitCoverageEnv(name, work_dir, git_repo)
             git_tag = tag_fmt.format(name, version, release, arch)
-            self.env.prepare_env(name, git_tag)
+            self.env.prepare_env(git_tag)
             self._extra_prepare(work_dir)
 
             yield
