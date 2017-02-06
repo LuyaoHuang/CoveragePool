@@ -311,6 +311,7 @@ class LibvirtCoverageHelper(CCoverageHelper):
 
             self.old_src_dir = work_dir
             self.new_src_dir = os.path.join(tmp_work_dir, src_dir)
+            yield
         except Exception as e:
             #TODO: logging
 
