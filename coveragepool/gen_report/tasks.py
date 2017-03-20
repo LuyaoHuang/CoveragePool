@@ -53,6 +53,7 @@ def load_settings(project=None):
 
 def load_helper_cls(project_name, params):
     cls_name = project_name.title() + 'CoverageHelper'
+    cls_name = cls_name.replace('-', '_')
     try:
         cls = getattr(report_helper, cls_name)
         # TODO: add some params in class

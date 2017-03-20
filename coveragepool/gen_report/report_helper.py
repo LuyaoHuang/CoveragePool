@@ -459,3 +459,7 @@ class VirtinstCoverageHelper(PythonCoverageHelper):
 
     def gen_report(self, tracefile, output_dir):
         PythonCoverageHelper.gen_report(self, tracefile, output_dir, True)
+
+class Virt_InstallCoverageHelper(VirtinstCoverageHelper):
+    def __init__(self, config_params):
+        super(Virt_InstallCoverageHelper, self).__init__(config_params)
