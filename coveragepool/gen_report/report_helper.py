@@ -331,6 +331,7 @@ class LibvirtCoverageHelper(CCoverageHelper):
 
     def gen_report(self, tracefile, output_dir):
         CCoverageHelper.replace_tracefile(self, tracefile, '/usr/coverage/', '/mnt/coverage/')
+        CCoverageHelper.replace_tracefile(self, tracefile, '/builddir/build/', '/mnt/coverage/')
         if self.new_src_dir:
             tmp_tracefile = CCoverageHelper.copy_replace_tracefile(self, tracefile,
                                                                    self.old_src_dir, self.new_src_dir)
