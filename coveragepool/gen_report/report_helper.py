@@ -169,6 +169,16 @@ class CCoverageHelper(BaseCoverageHelper):
         with open(file_path, 'w') as fp:
             fp.writelines(lines)
 
+    def valid_tracefile(self, file_path):
+        with open(file_path) as fp:
+            lines = fp.readlines()
+
+        for i, line in enumerate(lines):
+            if 'SF:' in line:
+                return True
+
+        return False
+
     def copy_replace_tracefile(self, file_path, src, tgt, check_all=True):
         with open(file_path) as fp:
             tmp_file = tempfile.NamedTemporaryFile(
@@ -329,9 +339,16 @@ class LibvirtCoverageHelper(CCoverageHelper):
     def periodic_check(self):
         raise NotImplementedError('periodic_check')
 
+    def merge_tracefile(self, tracefiles, merged_tracefile):
+        work_tracefiles = []
+        for tracefile in tracefiles:
+            if CCoverageHelper.valid_tracefile(self, tracefile):
+                CCoverageHelper.replace_tracefile(self, tracefile, '/usr/coverage/', '/mnt/coverage/')
+                CCoverageHelper.replace_tracefile(self, tracefile, '/builddir/build/', '/mnt/coverage/')
+                work_tracefiles.append(tracefile)
+        CCoverageHelper.merge_tracefile(self, work_tracefiles, merged_tracefile)
+
     def gen_report(self, tracefile, output_dir):
-        CCoverageHelper.replace_tracefile(self, tracefile, '/usr/coverage/', '/mnt/coverage/')
-        CCoverageHelper.replace_tracefile(self, tracefile, '/builddir/build/', '/mnt/coverage/')
         if self.new_src_dir:
             tmp_tracefile = CCoverageHelper.copy_replace_tracefile(self, tracefile,
                                                                    self.old_src_dir, self.new_src_dir)
