@@ -264,6 +264,52 @@ def merge_coverage_report(obj_ids, output_dir, merge_id=None):
         helper.merge_tracefile(coverage_files, tmp_tracefile)
         helper.gen_report(tmp_tracefile, output_dir)
 
+@task(base=MergeCoverageReportCB)
+def merge_convert_coverage_report(obj_ids, output_dir, merge_id):
+    tgt_version = None
+    coverage_files = []
+    tmp_coverage_files = []
+    shutil.rmtree(output_dir, True)
+    tmp_tracefile = '/tmp/merge.tracefile'
+
+    obj = CoverageReport.objects.get(id=merge_id)
+    ext_obj_ids = [i.id for i in obj.coverage_files.all()]
+    if set(ext_obj_ids) & set(obj_ids):
+        raise Exception("Found unexpected merge request, %s already "
+                        "been merged in CoverageReport obj (id %d)" %
+                        (str(list(set(ext_obj_ids) & set(obj_ids))), merge_id))
+
+    tgt_version = '.'.join(obj.version.split('.')[:-1])
+    if not obj.tracefile:
+        coverage_files.extend([i.coveragefile.path for i in obj.coverage_files.all()])
+    else:
+        coverage_files.append(obj.tracefile.path)
+
+    if not obj.project:
+        raise Exception('Not support CoverageReport without project')
+    params = load_settings(obj.project)
+    helper = load_helper_cls(obj.project.name, params)
+
+    try:
+        for obj_id in obj_ids:
+            tmp_obj = CoverageFile.objects.get(id=obj_id)
+            if tgt_version != '.'.join(tmp_obj.version.split('.')[:-1]):
+                tmp_tracefile = helper.convert_tracefile(tmp_obj.version,
+                                                         obj.version,
+                                                         tmp_obj.coveragefile.path)
+                coverage_files.append(tmp_tracefile)
+                tmp_coverage_files.append(tmp_tracefile)
+            else:
+                coverage_files.append(tmp_obj.coveragefile.path)
+
+        with helper.prepare_env(obj.version):
+            helper.merge_tracefile(coverage_files, tmp_tracefile)
+            helper.gen_report(tmp_tracefile, output_dir)
+    finally:
+        for trace_file in tmp_coverage_files:
+            if os.path.exists(trace_file):
+                os.unlink(trace_file)
+
 #
 # Periodic Tasks
 #

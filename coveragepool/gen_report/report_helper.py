@@ -348,6 +348,32 @@ class LibvirtCoverageHelper(CCoverageHelper):
                 work_tracefiles.append(tracefile)
         CCoverageHelper.merge_tracefile(self, work_tracefiles, merged_tracefile)
 
+    def convert_tracefile(self, src_ver, tgt_ver, tracefile):
+        tag_fmt = self.tag_fmt
+        git_repo = self.git_repo
+
+        name, version, release, arch = parse_package_name(src_ver)
+        src_git_tag = tag_fmt.format(name, version, release, arch)
+        name, version, release, arch = parse_package_name(tgt_ver)
+        tgt_git_tag = tag_fmt.format(name, version, release, arch)
+
+        work_dir = '/mnt/coverage/BUILD/libvirt-%s/' % version
+        self.env = GitCoverageEnv(name, work_dir, git_repo)
+        try:
+            self.env.prepare_env(src_git_tag)
+            tmp_diff = self.env.get_git_diff(src_git_tag, tgt_git_tag)
+            tmp_file = tempfile.NamedTemporaryFile(
+                mode='w', suffix='.tmp', prefix='diff-',
+                delete=False)
+            tmp_file.close()
+            CCoverageHelper.convert_tracefile(self, tracefile, tmp_file, tmp_diff)
+            return tmp_file
+        finally:
+            if self.env:
+                self.env.clean_up_env()
+            if tmp_diff and os.path.exists(tmp_diff):
+                os.unlink(tmp_diff)
+
     def gen_report(self, tracefile, output_dir):
         if self.new_src_dir:
             tmp_tracefile = CCoverageHelper.copy_replace_tracefile(self, tracefile,
