@@ -198,11 +198,15 @@ class CCoverageHelper(BaseCoverageHelper):
         run_cmd(cmd)
 
     def merge_tracefile(self, tracefiles, merged_tracefile):
-        cmd = 'lcov'
+        first = True
         for i in tracefiles:
-            cmd += ' -a %s' % i
-        cmd += ' -o %s' % merged_tracefile
-        run_cmd(cmd)
+            cmd = 'lcov -a %s' % i
+            if not first:
+                cmd += ' -a %s' % merged_tracefile
+            else:
+                first = False
+            cmd += ' -o %s' % merged_tracefile
+            run_cmd(cmd)
 
     def convert_tracefile(self, src_tf, tgt_tf, diff_file):
         cmd = 'lcov --diff %s %s -o %s' % (src_tf, diff_file, tgt_tf)
