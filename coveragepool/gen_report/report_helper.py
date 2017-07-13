@@ -374,7 +374,7 @@ class LibvirtCoverageHelper(CCoverageHelper):
                 delete=False)
             tmp_file.close()
             CCoverageHelper.convert_tracefile(self, tracefile, tmp_file.name, tmp_diff)
-            return tmp_file
+            return tmp_file.name
         finally:
             if self.env:
                 self.env.clean_up_env()
