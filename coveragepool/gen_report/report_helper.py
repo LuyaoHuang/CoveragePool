@@ -357,12 +357,15 @@ class LibvirtCoverageHelper(CCoverageHelper):
         git_repo = self.git_repo
 
         name, version, release, arch = parse_package_name(src_ver)
+        release = release.replace('.virtcov', '')
         src_git_tag = tag_fmt.format(name, version, release, arch)
         name, version, release, arch = parse_package_name(tgt_ver)
+        release = release.replace('.virtcov', '')
         tgt_git_tag = tag_fmt.format(name, version, release, arch)
 
         work_dir = '/mnt/coverage/BUILD/libvirt-%s/' % version
         self.env = GitCoverageEnv(name, work_dir, git_repo)
+        tmp_diff = None
         try:
             self.env.prepare_env(src_git_tag)
             tmp_diff = self.env.get_git_diff(src_git_tag, tgt_git_tag)
