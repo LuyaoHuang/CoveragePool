@@ -294,11 +294,11 @@ def merge_convert_coverage_report(obj_ids, output_dir, merge_id):
         for obj_id in obj_ids:
             tmp_obj = CoverageFile.objects.get(id=obj_id)
             if tgt_version != '.'.join(tmp_obj.version.split('.')[:-1]):
-                tmp_tracefile = helper.convert_tracefile(tmp_obj.version,
+                tmp_trace_file = helper.convert_tracefile(tmp_obj.version,
                                                          obj.version,
                                                          tmp_obj.coveragefile.path)
-                coverage_files.append(tmp_tracefile)
-                tmp_coverage_files.append(tmp_tracefile)
+                coverage_files.append(tmp_trace_file)
+                tmp_coverage_files.append(tmp_trace_file)
             else:
                 coverage_files.append(tmp_obj.coveragefile.path)
 
