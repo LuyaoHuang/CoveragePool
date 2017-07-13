@@ -41,7 +41,7 @@ class GoogleSheetMGR(object):
             try:
                 func = getattr(self.ws_obj, action)
                 return func(*args)
-            except gspread.exceptions.HTTPError as details:
+            except Exception as details:
                 self._authorize()
                 retry += 1
                 if retry > max_retry:
