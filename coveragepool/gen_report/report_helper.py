@@ -383,9 +383,13 @@ class LibvirtCoverageHelper(CCoverageHelper):
 
     def gen_report(self, tracefile, output_dir):
         if self.new_src_dir:
-            tmp_tracefile = CCoverageHelper.copy_replace_tracefile(self, tracefile,
-                                                                   self.old_src_dir, self.new_src_dir)
-            CCoverageHelper.gen_report(self, tmp_tracefile, output_dir, True)
+            try:
+                tmp_tracefile = CCoverageHelper.copy_replace_tracefile(self, tracefile,
+                                                                       self.old_src_dir, self.new_src_dir)
+                CCoverageHelper.gen_report(self, tmp_tracefile, output_dir, True)
+            finally:
+                if os.path.exists(tmp_tracefile):
+                    os.unlink(tmp_tracefile)
         else:
             CCoverageHelper.gen_report(self, tracefile, output_dir, True)
 
