@@ -355,6 +355,8 @@ class LibvirtCoverageHelper(CCoverageHelper):
     def convert_tracefile(self, src_ver, tgt_ver, tracefile):
         tag_fmt = self.tag_fmt
         git_repo = self.git_repo
+        if not CCoverageHelper.valid_tracefile(self, tracefile):
+            return
 
         name, version, release, arch = parse_package_name(src_ver)
         release = release.replace('.virtcov', '')

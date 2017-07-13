@@ -297,8 +297,9 @@ def merge_convert_coverage_report(obj_ids, output_dir, merge_id):
                 tmp_trace_file = helper.convert_tracefile(tmp_obj.version,
                                                          obj.version,
                                                          tmp_obj.coveragefile.path)
-                coverage_files.append(tmp_trace_file)
-                tmp_coverage_files.append(tmp_trace_file)
+                if tmp_trace_file:
+                    coverage_files.append(tmp_trace_file)
+                    tmp_coverage_files.append(tmp_trace_file)
             else:
                 coverage_files.append(tmp_obj.coveragefile.path)
 
