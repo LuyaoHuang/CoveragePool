@@ -320,6 +320,10 @@ class LibvirtCoverageHelper(CCoverageHelper):
                 tmp_work_dir = self.env.prepare_env(
                         ['libvirt-docs-%s-%s' % (version, release)])
                 src_dir = 'usr/share/doc/libvirt-docs-%s/gcno/' % version
+            elif 'el8' in release:
+                tmp_work_dir = self.env.prepare_env(
+                        ['libvirt-docs-%s-%s' % (version, release)])
+                src_dir = 'usr/share/doc/libvirt-docs/gcno/'
             else:
                 raise Exception('Unsupport distro type')
 
